@@ -2,12 +2,17 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QD
                             QHBoxLayout, QTextEdit, QLabel, QToolBar, QPushButton, 
                             QFileDialog, QStatusBar, QTabWidget, QSplitter, QLineEdit, QFrame,
                             QDialog, QTreeWidget, QTreeWidgetItem, QStackedWidget, QFormLayout,
-                            QSpinBox, QComboBox, QCheckBox, QColorDialog, QGroupBox, QListWidget)
+                            QSpinBox, QComboBox, QCheckBox, QColorDialog, QGroupBox, QListWidget,
+                            QStackedLayout, QButtonGroup)
 from PyQt6.QtCore import Qt, QSize, QSettings
-from PyQt6.QtGui import QIcon, QFont, QColor, QTextOption
+from PyQt6.QtGui import QIcon, QFont, QColor, QTextOption, QShortcut, QKeySequence
+
 from widgets.ToolTabs import CodeEditor, FileManagerTab, TerminalTab, WebBrowserTab, GitWidget
+from widgets.AIChat import  ChatAssistant
+from widgets.RyteCord import CollaborationWidget
 
 import platform
+import time
 import signal
 import sys
 import os
@@ -482,26 +487,28 @@ class SettingsDialog(QDialog):
         self.load_current_settings(self)
 
 class Editor(QMainWindow):
-    def __init__(self):
+    def __init__(self, project_path=None):
         super().__init__()
         self.current_file = None
-        project_path = initialize_workspace()
+        
         if project_path:
             self.current_project = project_path
         else:
-            dialog = ProjectSetupDialog()
-            if dialog.exec():
-                project_name = dialog.name_input.text()
-                project_type = dialog.type_combo.currentText()
-                base_dir = os.path.expanduser("~/RytonStudio/projects")
-                self.current_project = os.path.join(base_dir, project_type, project_name)
-                os.makedirs(self.current_project, exist_ok=True)
-                initialize_project_structure(self.current_project, dialog.type_combo.currentText())
-        
+            project_path = initialize_workspace()
+            if project_path:
+                self.current_project = project_path
+            else:
+                dialog = ProjectSetupDialog()
+                if dialog.exec():
+                    # Use the exact path from dialog
+                    self.current_project = dialog.project_path.text()
+                    os.makedirs(self.current_project, exist_ok=True)
+                    initialize_project_structure(self.current_project, dialog.project_group.checkedButton().layout().itemAt(1).layout().itemAt(0).widget().text())
+
         self.setup_ui()
         
     def setup_ui(self):
-        self.setWindowTitle("RytonStudio IDE")
+        self.setWindowTitle("RytonStudio IDE - " + os.path.basename(self.current_project))
         self.setGeometry(100, 100, 1000, 700)
         
         # Main central widget
@@ -537,6 +544,7 @@ class Editor(QMainWindow):
         self.git_view = GitWidget(self.current_project)
         self.test_view = QWidget()
         self.github_view = WebBrowserTab("https://github.com")
+        self.collab_widget = CollaborationWidget()
 
         # Создаем stack и добавляем все виджеты
         self.sidebar_stack = QStackedWidget()
@@ -546,25 +554,28 @@ class Editor(QMainWindow):
         self.sidebar_stack.addWidget(self.search_view)
         self.sidebar_stack.addWidget(self.git_view)
         self.sidebar_stack.addWidget(self.test_view)
+        self.sidebar_stack.addWidget(self.collab_widget)
         self.github_view = WebBrowserTab("https://github.com")
         self.sidebar_stack.addWidget(self.github_view)
 
 
         # Добавляем кнопки переключения в боковую панель
         actions = [
-            ("icons/new.svg", "New File", self.new_file),
+#            ("icons/new.svg", "New File", self.new_file),
             ("icons/directory.svg", "Open File", self.open_file),
-            ("icons/save.svg", "Save", self.save_file),
+#            ("icons/save.svg", "Save", self.save_file),
             ("icons/run.svg", "Run", self.run_code),
             ("icons/terminal.svg", "Toggle Terminal", self.toggle_terminal),
-            ("icons/settings.svg", "Settings", self.open_settings),
+#            ("icons/settings.svg", "Settings", self.open_settings),
             ("icons/web.svg", "Toggle Sidebar", self.toggle_sidebar_content),
             ("icons/directory.svg", "Files", lambda: self.sidebar_stack.setCurrentWidget(self.file_manager)),
-            ("icons/extensions.svg", "Extensions", lambda: self.sidebar_stack.setCurrentWidget(self.extensions_view)),
-            ("icons/debug.svg", "Debug", lambda: self.sidebar_stack.setCurrentWidget(self.debug_view)),
-            ("icons/search.svg", "Search", lambda: self.sidebar_stack.setCurrentWidget(self.search_view)),
+#            ("icons/extensions.svg", "Extensions", lambda: self.sidebar_stack.setCurrentWidget(self.extensions_view)),
+#            ("icons/debug.svg", "Debug", lambda: self.sidebar_stack.setCurrentWidget(self.debug_view)),
+#            ("icons/search.svg", "Search", lambda: self.sidebar_stack.setCurrentWidget(self.search_view)),
             ("icons/git.svg", "Git", lambda: self.sidebar_stack.setCurrentWidget(self.git_view)),
-            ("icons/test.svg", "Testing", lambda: self.sidebar_stack.setCurrentWidget(self.test_view))
+            ("icons/collab.svg", "AI Assistant", lambda: self.sidebar_stack.setCurrentWidget(self.chat_assistant)),
+            ("icons/chat.svg", "RyteCord Chat", lambda: self.sidebar_stack.setCurrentWidget(self.collab_widget))
+#            ("icons/test.svg", "Testing", lambda: self.sidebar_stack.setCurrentWidget(self.test_view))
         ]
         for icon_path, tooltip, handler in actions:
             button = QPushButton()
@@ -611,6 +622,10 @@ class Editor(QMainWindow):
         self.terminal.layout().setContentsMargins(0, 0, 0, 0)
         self.terminal.layout().setSpacing(0)
         right_container.addWidget(self.terminal)
+
+        # В методе setup_ui добавим:
+        self.chat_assistant = ChatAssistant()
+        self.sidebar_stack.addWidget(self.chat_assistant)
         
         # Add right container to main splitter
         self.main_splitter.addWidget(right_container)
@@ -624,8 +639,186 @@ class Editor(QMainWindow):
         # Status bar with git info and line/column indicators
         self.setup_status_bar()
 
+
+        # Добавляем стили для боковой панели
+        self.side_toolbar.setStyleSheet("""
+            QToolBar {
+                background-color: #252526;
+                border: none;
+                spacing: 8px;
+                padding: 4px;
+            }
+        """)
+
+        # Стили для вкладок
+        self.editor_tabs.setStyleSheet("""
+            QTabWidget::pane {
+                border: none;
+                background: #1e1e1e;
+            }
+            
+            QTabBar::tab {
+                background: #2d2d2d;
+                color: #969696;
+                padding: 8px 16px;
+                border: none;
+                min-width: 100px;
+            }
+            
+            QTabBar::tab:selected {
+                background: #1e1e1e;
+                color: #ffffff;
+                border-top: 2px solid #007acc;
+            }
+            
+            QTabBar::tab:hover:!selected {
+                background: #2d2d2d;
+                color: #ffffff;
+            }
+            
+            QTabBar::close-button {
+                image: url(icons/close.svg);
+                subcontrol-position: right;
+            }
+            
+            QTabBar::close-button:hover {
+                background: #c84e4e;
+                border-radius: 6px;
+            }
+        """)
+
+        # Стили для файлового менеджера
+        self.sidebar_stack.setStyleSheet("""
+            QStackedWidget {
+                background: #252526;
+                border: none;
+            }
+            
+            QTreeView {
+                background: #252526;
+                border: none;
+                color: #cccccc;
+            }
+            
+            QTreeView::item {
+                padding: 4px;
+                border-radius: 4px;
+            }
+            
+            QTreeView::item:hover {
+                background: #2a2d2e;
+            }
+            
+            QTreeView::item:selected {
+                background: #37373d;
+                color: #ffffff;
+            }
+            
+            QHeaderView::section {
+                background: #252526;
+                color: #cccccc;
+                border: none;
+                padding: 4px;
+            }
+        """)
+
+        # Стили для терминала
+        self.terminal.setStyleSheet("""
+            QWidget {
+                background: #1e1e1e;
+                color: #d4d4d4;
+                border: none;
+            }
+            
+            QTextEdit {
+                background-color: #1e1e1e;
+                color: #d4d4d4;
+                border: none;
+                font-family: 'JetBrains Mono', 'Consolas', monospace;
+                font-size: 13px;
+                padding: 4px;
+                selection-background-color: #264f78;
+            }
+            
+            QScrollBar:vertical {
+                background: #1e1e1e;
+                width: 14px;
+                margin: 0px;
+            }
+            
+            QScrollBar::handle:vertical {
+                background: #424242;
+                min-height: 20px;
+                border-radius: 7px;
+            }
+            
+            QScrollBar::handle:vertical:hover {
+                background: #4f4f4f;
+            }
+        """)
+
+        # Стили для сплиттеров
+        self.main_splitter.setStyleSheet("""
+            QSplitter::handle {
+                background: #2d2d2d;
+            }
+            
+            QSplitter::handle:horizontal {
+                width: 2px;
+            }
+            
+            QSplitter::handle:vertical {
+                height: 2px;
+            }
+        """)
         # Replace file_manager with sidebar_stack in splitter
         self.main_splitter.insertWidget(0, self.sidebar_stack)
+
+        QShortcut(QKeySequence("Ctrl+N"), self, self.new_file)
+        QShortcut(QKeySequence("Ctrl+O"), self, self.open_file)
+
+    def split_vertical(self):
+        # Реализация вертикального разделения окна
+        pass
+
+    def split_horizontal(self):
+        # Реализация горизонтального разделения окна
+        pass
+
+    def focus_split(self, direction):
+        # Переключение между разделенными окнами
+        pass
+
+    def show_command_palette(self):
+        # Показать командную палитру
+        pass
+
+    def fold_code(self):
+        # Свернуть блок кода
+        pass
+
+    def unfold_code(self):
+        # Развернуть блок кода
+        pass
+
+    def goto_line(self):
+        # Переход к строке
+        line, ok = QInputDialog.getInt(self, "Go to Line", "Line number:", 1, 1, self.document().blockCount())
+        if ok:
+            cursor = QTextCursor(self.document().findBlockByLineNumber(line - 1))
+            self.setTextCursor(cursor)
+
+    def quick_open(self):
+        # Быстрое открытие файла
+        pass
+
+    def find_in_files(self):
+        # Поиск по всем файлам
+        pass
+
+    def trigger_suggestions(self):
+        # Вызов автодополнения
+        self.showCompleter()
 
     def toggle_sidebar_content(self):
         current = self.sidebar_stack.currentIndex()
@@ -643,15 +836,24 @@ class Editor(QMainWindow):
             self.load_file(file_path)
 
     def save_file(self):
+        print(self)
         current_editor = self.editor_tabs.currentWidget()
-        if not self.current_file:
-            file_path, _ = QFileDialog.getSaveFileName(self, "Save File")
+        if current_editor:
+            file_path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Save As...",
+                self.current_project,
+                "Ryton files (*.ry);;Python files (*.py);;All Files (*.*)"
+            )
             if file_path:
-                self.current_file = file_path
-        if self.current_file:
-            with open(self.current_file, 'w') as f:
-                f.write(current_editor.toPlainText())
-            self.status_bar.showMessage(f"Saved: {self.current_file}")
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(current_editor.toPlainText())
+                # Обновляем имя вкладки
+                self.editor_tabs.setTabText(
+                    self.editor_tabs.currentIndex(), 
+                    os.path.basename(file_path)
+                )
+                self.status_bar.showMessage(f"Saved: {file_path}", 3000)
 
     def run_code(self):
         current_editor = self.editor_tabs.currentWidget()
@@ -673,13 +875,23 @@ class Editor(QMainWindow):
         try:
             with open(file_path, 'r') as f:
                 content = f.read()
-            new_editor = CodeEditor()
+                
+            if file_path.endswith('.md'):
+                new_editor = MarkdownEditor()  # Используем специальный редактор для MD
+            else:
+                new_editor = CodeEditor()
+                
             new_editor.setPlainText(content)
-            self.editor_tabs.addTab(new_editor, os.path.basename(file_path))
-            self.editor_tabs.setCurrentWidget(new_editor)
+            editor_widget = new_editor.set_file_type(file_path)
+            
+            # Добавляем вкладку с правильным виджетом
+            self.editor_tabs.addTab(editor_widget, os.path.basename(file_path))
+            self.editor_tabs.setCurrentWidget(editor_widget)
             self.current_file = file_path
             self.status_bar.showMessage(f"Opened: {file_path}")
+            
         except Exception as e:
+            print(f"Loading error: {str(e)}")  # Добавим вывод ошибки в консоль
             self.status_bar.showMessage(f"Error opening file: {str(e)}")
 
     def open_settings(self):
@@ -701,77 +913,536 @@ class Editor(QMainWindow):
 class ProjectSetupDialog(QDialog):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Create New Project")
-        self.setMinimumWidth(500)
+        self.setWindowTitle("Создание нового проекта")
+        self.setMinimumWidth(900)
+        self.setMinimumHeight(600)
+        
+        # Основной layout с градиентным фоном
+        layout = QHBoxLayout(self)
+        self.setStyleSheet("""
+            QDialog {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #1a1a1a, stop:1 #2d2d2d);
+            }
+        """)
+        
+        # Левая панель с шагами
+        steps_panel = QWidget()
+        steps_panel.setFixedWidth(250)
+        steps_panel.setStyleSheet("""
+            QWidget {
+                background: rgba(30, 30, 30, 0.7);
+                border-right: 1px solid #3d3d3d;
+            }
+        """)
+        
+        steps_layout = QVBoxLayout(steps_panel)
+        steps_layout.setSpacing(2)
+        steps_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Заголовок левой панели
+        header = QLabel("Создание проекта")
+        header.setStyleSheet("""
+            QLabel {
+                color: #e1e1e1;
+                font-size: 18px;
+                padding: 20px;
+                background: rgba(40, 40, 40, 0.7);
+            }
+        """)
+        steps_layout.addWidget(header)
+        
+        # Шаги с иконками
+        steps = [
+            ("Тип проекта", "icons/project.svg"),
+            ("Язык", "icons/code.svg"), 
+            ("Настройки", "icons/settings.svg"),
+            ("Зависимости", "icons/package.svg")
+        ]
+        
+        self.step_buttons = []
+        for step_name, icon_path in steps:
+            btn = QPushButton(step_name)
+            btn.setCheckable(True)
+            btn.setIcon(QIcon(icon_path))
+            btn.setIconSize(QSize(24, 24))
+            btn.setStyleSheet("""
+                QPushButton {
+                    text-align: left;
+                    padding: 15px 20px;
+                    border: none;
+                    color: #b4b4b4;
+                    background: transparent;
+                    font-size: 14px;
+                }
+                QPushButton:checked {
+                    background: rgba(55, 55, 61, 0.7);
+                    color: #ffffff;
+                    border-left: 4px solid #007acc;
+                }
+                QPushButton:hover:!checked {
+                    background: rgba(45, 45, 50, 0.7);
+                }
+            """)
+            steps_layout.addWidget(btn)
+            self.step_buttons.append(btn)
+        
+        steps_layout.addStretch()
+        
+        # Правая панель с контентом
+        content_panel = QWidget()
+        content_layout = QVBoxLayout(content_panel)
+        
+        # Стек для страниц
+        self.pages_stack = QStackedWidget()
+        
+        # Страница выбора типа проекта
+        project_page = QWidget()
+        project_layout = QVBoxLayout(project_page)
+        
+        project_types = [
+            ("CLI Application", "icons/terminal.svg", "Консольное приложение с интерфейсом командной строки"),
+            ("GUI Application", "icons/window.svg", "Графическое приложение с пользовательским интерфейсом"),
+            ("Web Application", "icons/web.svg", "Веб-приложение с поддержкой HTTP и REST API"),
+            ("Library/Framework", "icons/package.svg", "Библиотека или фреймворк для других проектов")
+        ]
+        
+        self.project_group = QButtonGroup(self)
+
+        for name, icon, desc in project_types:
+            card = QPushButton()
+            card.setCheckable(True)
+            self.project_group.addButton(card)
+            card.setFixedHeight(100)
+            card.setStyleSheet("""
+                QPushButton {
+                    text-align: left;
+                    padding: 20px;
+                    border: 1px solid #404040;
+                    border-radius: 10px;
+                    background: rgba(45, 45, 45, 0.7);
+                    color: #d4d4d4;
+                    margin: 5px 0;
+                }
+                QPushButton:checked {
+                    background: rgba(55, 55, 61, 0.9);
+                    border: 2px solid #007acc;
+                }
+                QPushButton:hover:!checked {
+                    background: rgba(50, 50, 55, 0.8);
+                    border: 1px solid #505050;
+                }
+            """)
+            
+            card_layout = QHBoxLayout(card)
+            
+            icon_label = QLabel()
+            icon_label.setPixmap(QIcon(icon).pixmap(48, 48))
+            card_layout.addWidget(icon_label)
+            
+            text_layout = QVBoxLayout()
+            name_label = QLabel(name)
+            name_label.setStyleSheet("font-weight: bold; font-size: 16px; color: #ffffff;")
+            desc_label = QLabel(desc)
+            desc_label.setStyleSheet("color: #b4b4b4; font-size: 13px;")
+            desc_label.setWordWrap(True)
+            
+            text_layout.addWidget(name_label)
+            text_layout.addWidget(desc_label)
+            
+            card_layout.addLayout(text_layout)
+            card_layout.addStretch()
+            
+            project_layout.addWidget(card)
+        
+        project_layout.addStretch()
+        self.pages_stack.addWidget(project_page)
+        
+        # Добавляем навигационные кнопки
+        nav_layout = QHBoxLayout()
+        self.back_btn = QPushButton("Назад")
+        self.next_btn = QPushButton("Далее")
+        
+        for btn in [self.back_btn, self.next_btn]:
+            btn.setFixedWidth(120)
+            btn.setStyleSheet("""
+                QPushButton {
+                    padding: 10px;
+                    background: #007acc;
+                    border: none;
+                    border-radius: 5px;
+                    color: white;
+                    font-size: 14px;
+                }
+                QPushButton:hover {
+                    background: #0098ff;
+                }
+                QPushButton:pressed {
+                    background: #005c99;
+                }
+            """)
+        
+        nav_layout.addWidget(self.back_btn)
+        nav_layout.addStretch()
+        nav_layout.addWidget(self.next_btn)
+
+        # Подключаем обработчики
+        self.next_btn.clicked.connect(self.next_step)
+        self.back_btn.clicked.connect(self.prev_step)
+        
+        self.current_step = 0
+        self.back_btn.setEnabled(False)
+
+        content_layout.addWidget(self.pages_stack)
+        content_layout.addLayout(nav_layout)
+        
+        # Добавляем панели в главный layout
+        layout.addWidget(steps_panel)
+        layout.addWidget(content_panel, stretch=1)
+
+        # Активируем первый шаг
+        self.step_buttons[0].setChecked(True)
+
+        # Создаем все страницы
+        self.create_project_type_page()
+        self.create_language_page()
+        self.create_settings_page()
+        self.create_dependencies_page()
+
+        self.project_group.buttonClicked.connect(self.update_project_path)
+
+    def next_step(self):
+        # Проверяем, выбран ли тип проекта
+        if self.current_step == 0 and not self.project_group.checkedButton():
+            QMessageBox.warning(self, "Внимание", "Выберите тип проекта")
+            return
+            
+        if self.current_step < len(self.step_buttons) - 1:
+            self.current_step += 1
+            self.step_buttons[self.current_step].setChecked(True)
+            self.pages_stack.setCurrentIndex(self.current_step)
+            
+        # Включаем кнопку "Назад" после первого шага
+        self.back_btn.setEnabled(True)
+        
+        # Меняем текст кнопки на последнем шаге
+        if self.current_step == len(self.step_buttons) - 1:
+            self.next_btn.setText("Создать")
+            self.next_btn.clicked.disconnect()
+            self.next_btn.clicked.connect(self.create_project)
+
+    def prev_step(self):
+        if self.current_step > 0:
+            self.current_step -= 1
+            self.step_buttons[self.current_step].setChecked(True)
+            self.pages_stack.setCurrentIndex(self.current_step)
+            
+        # Отключаем кнопку "Назад" на первом шаге
+        if self.current_step == 0:
+            back_btn.setEnabled(False)
+            
+        # Возвращаем кнопке "Далее" исходное состояние
+        if next_btn.text() == "Создать":
+            next_btn.setText("Далее")
+            next_btn.clicked.disconnect()
+            next_btn.clicked.connect(self.next_step)
+
+    def create_project(self):
+        # Получаем выбранный тип проекта
+        selected_project = self.project_group.checkedButton()
+        if selected_project:
+            project_type = selected_project.findChild(QLabel).text()
+            # Здесь логика создания проекта
+            self.accept()
+
+    def update_project_path(self):
+        if hasattr(self, 'project_name') and self.project_group.checkedButton():
+            button = self.project_group.checkedButton()
+            layout = button.layout()
+            text_layout = layout.itemAt(1).layout()
+            project_type = text_layout.itemAt(0).widget().text()
+            print(f"Selected type: {project_type}")  # Отладка
+            
+            project_name = self.project_name.text()
+            base_dir = os.path.expanduser("~/RytonStudio/projects")
+            
+            type_map = {
+                "CLI Application": "CLI",
+                "GUI Application": "GUI",
+                "Web Application": "WEB",
+                "Library/Framework": "LIB"
+            }
+            
+            path_type = type_map.get(project_type, "OTHER")
+            print(f"Mapped type: {path_type}")  # Отладка
+            
+            full_path = os.path.join(base_dir, path_type, project_name)
+            print(f"Full path: {full_path}")  # Отладка
+            self.project_path.setText(full_path)
+
+
+    def create_project_type_page(self):
+        # Существующий код страницы выбора типа проекта
+        pass
+
+    def create_language_page(self):
+        language_page = QWidget()
+        layout = QVBoxLayout(language_page)
+        
+        languages = [
+            ("Ryton", "icons/ryton.png", "Современный язык высокого уровня для разработки профисионального ПО"),
+            ("Zig", "icons/zig.svg", "Низкоуровневый язык с нулевыми накладными расходами")
+        ]
+
+        self.language_group = QButtonGroup(self)
+        
+        for name, icon, desc in languages:
+            card = self.create_card(name, icon, desc)
+            self.language_group.addButton(card)
+            layout.addWidget(card)
+            
+        layout.addStretch()
+        self.pages_stack.addWidget(language_page)
+
+    def create_settings_page(self):
+        settings_page = QWidget()
+        layout = QVBoxLayout(settings_page)
+        
+        form = QFormLayout()
+        self.project_name = QLineEdit()
+        self.project_path = QLineEdit()
+        self.project_path.setReadOnly(True)  # Делаем поле только для чтения
+        self.version = QLineEdit("0.1.0")
+        
+        # Обновляем путь при изменении имени проекта
+        self.project_name.textChanged.connect(self.update_project_path)
+        
+        form.addRow("Имя проекта:", self.project_name)
+        form.addRow("Путь к проекту:", self.project_path)
+        form.addRow("Версия:", self.version)
+        
+        layout.addLayout(form)
+        layout.addStretch()
+        self.pages_stack.addWidget(settings_page)
+
+    def create_dependencies_page(self):
+        deps_page = QWidget()
+        layout = QVBoxLayout(deps_page)
+        
+        deps_list = QListWidget()
+        deps_list.addItems([
+            "libs not found",
+        ])
+        
+        layout.addWidget(deps_list)
+        self.pages_stack.addWidget(deps_page)
+
+    def create_card(self, name, icon, desc):
+        card = QPushButton()
+        card.setCheckable(True)
+        card.setFixedHeight(100)
+        # Существующие стили для карточки
+        
+        card_layout = QHBoxLayout(card)
+        icon_label = QLabel()
+        icon_label.setPixmap(QIcon(icon).pixmap(48, 48))
+        card_layout.addWidget(icon_label)
+        
+        text_layout = QVBoxLayout()
+        name_label = QLabel(name)
+        name_label.setStyleSheet("font-weight: bold; font-size: 16px; color: #ffffff;")
+        desc_label = QLabel(desc)
+        desc_label.setStyleSheet("color: #b4b4b4; font-size: 13px;")
+        desc_label.setWordWrap(True)
+        
+        text_layout.addWidget(name_label)
+        text_layout.addWidget(desc_label)
+        
+        card_layout.addLayout(text_layout)
+        card_layout.addStretch()
+        
+        return card
+
+class OpenProjectDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Открыть проект")
+        self.setMinimumWidth(800)
+        self.setMinimumHeight(500)
         
         layout = QVBoxLayout(self)
         
-        # Recent project button
-        self.recent_btn = QPushButton("Open Recent Project")
-        self.recent_btn.clicked.connect(self.open_recent)
-        layout.addWidget(self.recent_btn)
+        # Дерево проектов
+        self.project_tree = QTreeWidget()
+        self.project_tree.setHeaderLabels(["Проект", "Тип", "Последнее изменение"])
+        self.project_tree.setStyleSheet("""
+            QTreeWidget {
+                background: #1e1e1e;
+                border: 1px solid #3d3d3d;
+                border-radius: 5px;
+            }
+            QTreeWidget::item {
+                padding: 8px;
+                border-radius: 4px;
+            }
+            QTreeWidget::item:hover {
+                background: #2d2d2d;
+            }
+            QTreeWidget::item:selected {
+                background: #37373d;
+            }
+        """)
         
-        # Select project button
-        self.select_btn = QPushButton("Select Project")
-        self.select_btn.clicked.connect(self.select_project)
-        layout.addWidget(self.select_btn)
+        # Загружаем список проектов
+        self.load_projects()
         
-        # Separator
-        line = QFrame()
-        line.setFrameShape(QFrame.Shape.HLine)
-        layout.addWidget(line)
+        layout.addWidget(self.project_tree)
         
-        # Existing dialog content...
-        name_layout = QHBoxLayout()
-        name_label = QLabel("Project name:")
-        self.name_input = QLineEdit()
-        name_layout.addWidget(name_label)
-        name_layout.addWidget(self.name_input)
-        layout.addLayout(name_layout)
+        # Кнопки
+        buttons = QHBoxLayout()
+        open_btn = QPushButton("Открыть")
+        cancel_btn = QPushButton("Отмена")
         
-        type_layout = QHBoxLayout()
-        type_label = QLabel("Project type:")
-        self.type_combo = QComboBox()
-        self.type_combo.addItems(["CLI", "GUI", "WEB"])
-        type_layout.addWidget(type_label)
-        type_layout.addWidget(self.type_combo)
-        layout.addLayout(type_layout)
+        for btn in [open_btn, cancel_btn]:
+            btn.setStyleSheet("""
+                QPushButton {
+                    padding: 8px 16px;
+                    background: #007acc;
+                    border: none;
+                    border-radius: 4px;
+                    color: white;
+                }
+                QPushButton:hover {
+                    background: #0098ff;
+                }
+            """)
         
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | 
-            QDialogButtonBox.StandardButton.Cancel
-        )
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+        buttons.addStretch()
+        buttons.addWidget(open_btn)
+        buttons.addWidget(cancel_btn)
+        
+        layout.addLayout(buttons)
+        
+        # Подключаем сигналы
+        open_btn.clicked.connect(self.accept)
+        cancel_btn.clicked.connect(self.reject)
+        self.project_tree.itemDoubleClicked.connect(self.accept)
 
-    def open_recent(self):
+    def load_projects(self):
         base_dir = os.path.expanduser("~/RytonStudio/projects")
-        # Get most recent project
-        recent = self.get_most_recent_project(base_dir)
-        if recent:
-            self.selected_project = recent
-            self.accept()
+        for project_type in ["CLI", "GUI", "WEB", "LIB"]:
+            type_path = os.path.join(base_dir, project_type)
+            if os.path.exists(type_path):
+                for project in os.listdir(type_path):
+                    project_path = os.path.join(type_path, project)
+                    if os.path.isdir(project_path):
+                        item = QTreeWidgetItem([
+                            project,
+                            project_type,
+                            time.strftime("%Y-%m-%d %H:%M", 
+                                        time.localtime(os.path.getmtime(project_path)))
+                        ])
+                        self.project_tree.addTopLevelItem(item)
 
-    def select_project(self):
-        base_dir = os.path.expanduser("~/RytonStudio/projects")
-        project_dir = QFileDialog.getExistingDirectory(self, "Select Project", base_dir)
-        if project_dir:
-            self.selected_project = project_dir
-            self.accept()
+    def get_selected_project(self):
+        item = self.project_tree.currentItem()
+        if item:
+            project_name = item.text(0)
+            project_type = item.text(1)
+            return os.path.expanduser(f"~/RytonStudio/projects/{project_type}/{project_name}")
+        return None
 
-    def get_most_recent_project(self, base_dir):
-        projects = []
-        for root, dirs, files in os.walk(base_dir):
-            if "project.ryt" in files:
-                projects.append((os.path.getmtime(root), root))
-        if projects:
-            return sorted(projects, reverse=True)[0][1]
+class RecentProjectDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Последние проекты")
+        self.setMinimumWidth(600)
+        self.setMinimumHeight(400)
+        
+        layout = QVBoxLayout(self)
+        
+        # Список последних проектов
+        self.recent_list = QListWidget()
+        self.recent_list.setStyleSheet("""
+            QListWidget {
+                background: #1e1e1e;
+                border: 1px solid #3d3d3d;
+                border-radius: 5px;
+            }
+            QListWidget::item {
+                padding: 12px;
+                border-radius: 4px;
+            }
+            QListWidget::item:hover {
+                background: #2d2d2d;
+            }
+            QListWidget::item:selected {
+                background: #37373d;
+            }
+        """)
+        
+        self.load_recent_projects()
+        layout.addWidget(self.recent_list)
+        
+        # Кнопки
+        buttons = QHBoxLayout()
+        open_btn = QPushButton("Открыть")
+        cancel_btn = QPushButton("Отмена")
+        
+        for btn in [open_btn, cancel_btn]:
+            btn.setStyleSheet("""
+                QPushButton {
+                    padding: 8px 16px;
+                    background: #007acc;
+                    border: none;
+                    border-radius: 4px;
+                    color: white;
+                }
+                QPushButton:hover {
+                    background: #0098ff;
+                }
+            """)
+        
+        buttons.addStretch()
+        buttons.addWidget(open_btn)
+        buttons.addWidget(cancel_btn)
+        
+        layout.addLayout(buttons)
+        
+        # Подключаем сигналы
+        open_btn.clicked.connect(self.accept)
+        cancel_btn.clicked.connect(self.reject)
+        self.recent_list.itemDoubleClicked.connect(self.accept)
+
+    def load_recent_projects(self):
+        settings = QSettings('RytonStudio', 'RecentProjects')
+        recent_projects = settings.value('projects', [])
+        for project in recent_projects:
+            if os.path.exists(project):
+                name = os.path.basename(project)
+                item = QListWidgetItem(f"{name} ({project})")
+                item.setData(Qt.ItemDataRole.UserRole, project)
+                self.recent_list.addItem(item)
+
+    def get_selected_project(self):
+        item = self.recent_list.currentItem()
+        if item:
+            return item.data(Qt.ItemDataRole.UserRole)
         return None
 
 def initialize_project_structure(project_path, project_type):
     """Create project structure based on type"""
-    if project_type == "CLI":
+    # Map the display names to internal types
+    type_map = {
+        "CLI Application": "CLI",
+        "GUI Application": "GUI", 
+        "Web Application": "WEB",
+        "Library/Framework": "LIB"
+    }
+    
+    internal_type = type_map.get(project_type, "CLI")
+    
+    if internal_type == "CLI":
         dirs = [
             "src",
             "src/tests",
@@ -785,12 +1456,12 @@ def initialize_project_structure(project_path, project_type):
             "build.ry": ""
         }
     
-    elif project_type == "GUI":
+    elif internal_type == "GUI":
         dirs = [
             "src",
             "src/widgets",
             "src/resources",
-            "src/resources/fonts",
+            "src/resources/fonts", 
             "src/resources/images",
             "src/resources/icons",
             "src/tests",
@@ -804,7 +1475,7 @@ def initialize_project_structure(project_path, project_type):
             "build.ry": ""
         }
     
-    elif project_type == "WEB":
+    elif internal_type == "WEB":
         dirs = [
             "src",
             "src/templates",
@@ -818,6 +1489,20 @@ def initialize_project_structure(project_path, project_type):
             "src/app.ry": "",
             "src/templates/base.html": "<!DOCTYPE html>\n<html>\n<head>\n    <title>Web Project</title>\n</head>\n<body>\n    {% block content %}{% endblock %}\n</body>\n</html>",
             "README.md": f"# Web Project\n\nDescription of your project",
+            "requirements.txt": ""
+        }
+    
+    elif internal_type == "LIB":
+        dirs = [
+            "src",
+            "src/lib",
+            "examples",
+            "tests",
+            "docs"
+        ]
+        files = {
+            "src/lib.ry": "",
+            "README.md": f"# Library Project\n\nDescription of your library",
             "requirements.txt": ""
         }
 
@@ -884,8 +1569,38 @@ def main():
     signal.signal(signal.SIGTERM, signal.SIG_DFL)
     
     project_path = initialize_workspace()
-    editor = Editor()
-    editor.show()
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "--open":
+            dialog = OpenProjectDialog()
+            if dialog.exec():
+                project_path = dialog.get_selected_project()
+                if project_path:
+                    editor = Editor(project_path)
+                    editor.show()
+        elif sys.argv[1] == "--recent":
+            dialog = RecentProjectDialog()
+            if dialog.exec():
+                project_path = dialog.get_selected_project()
+                if project_path:
+                    editor = Editor(project_path)
+                    editor.show()
+        elif sys.argv[1] == "--project" and len(sys.argv) > 3:
+            # Формат: --project <тип> <имя>
+            project_type = sys.argv[2]
+            project_name = sys.argv[3]
+            base_dir = os.path.expanduser("~/RytonStudio/projects")
+            project_path = os.path.join(base_dir, project_type, project_name)
+            
+            if os.path.exists(project_path):
+                editor = Editor(project_path)
+                editor.show()
+            else:
+                print(f"Проект {project_name} типа {project_type} не найден")
+                sys.exit(1)
+    else:
+        editor = Editor()
+        editor.show()
+
     sys.exit(app.exec())
 
 if __name__ == "__main__":

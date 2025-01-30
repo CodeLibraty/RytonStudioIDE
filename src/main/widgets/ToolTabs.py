@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QTextEdit, QPlainTextEdit,
                             QTreeView, QTextEdit, QCompleter, QInputDialog, QPushButton,
                             QInputDialog, QMenu, QLineEdit, QMessageBox, QHBoxLayout,
-                            QVBoxLayout, QTreeWidget, QTreeWidgetItem, QLabel)
+                            QVBoxLayout, QTreeWidget, QTreeWidgetItem, QLabel, QSplitter)
 from PyQt6.QtCore import Qt, QUrl, QDir, QProcess, QStringListModel, QTimer, QPoint, QEvent, QDir,QSize
 from PyQt6.QtGui import (QSyntaxHighlighter, QTextCursor, QTextCharFormat, QColor, QFont,
                         QStandardItemModel, QStandardItem, QPainter, QFontDatabase,
@@ -96,6 +96,49 @@ class WebBrowserTab(QWidget):
 
     def update_url(self, url):
         self.url_bar.setText(url.toString())
+
+class MarkdownPreview(QWebEngineView):
+    def __init__(self):
+        super().__init__()
+        self.setStyleSheet("background: #1e1e1e;")
+        self.setHtml("""
+        <style>
+            body { 
+                background: #1e1e1e; 
+                color: #d4d4d4;
+                font-family: 'Segoe UI', sans-serif;
+                padding: 20px;
+            }
+            code { background: #2d2d2d; padding: 2px 4px; border-radius: 3px; }
+            pre { background: #2d2d2d; padding: 16px; border-radius: 8px; }
+            blockquote { border-left: 4px solid #444; margin: 0; padding-left: 16px; }
+            img { max-width: 100%; }
+            a { color: #4CAF50; }
+        </style>
+        """)
+
+class MarkdownHighlighter(QSyntaxHighlighter):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.rules = [
+            # Заголовки
+            (r'^#\s.*$', QColor("#569CD6")),
+            # Жирный текст
+            (r'\*\*.*?\*\*', QColor("#CE9178")),
+            # Курсив
+            (r'\*.*?\*', QColor("#9CDCFE")),
+            # Код
+            (r'`.*?`', QColor("#4EC9B0")),
+            # Ссылки
+            (r'\[.*?\]\(.*?\)', QColor("#608B4E")),
+            # Списки
+            (r'^\s*[\-\*]\s', QColor("#D7BA7D")),
+        ]
+    def highlightBlock(self, text):
+        for pattern, format in self.rules:
+            for match in re.finditer(pattern, text):
+                self.setFormat(match.start(), match.end() - match.start(), format)
+
 
 class GitWidget(QWidget):
     def __init__(self, project_path):
@@ -340,6 +383,87 @@ class RytonHighlighter(QSyntaxHighlighter):
         for pattern, format in self.highlighting_rules:
             for match in pattern.finditer(text):
                 self.setFormat(match.start(), match.end() - match.start(), format)
+
+class ZigHighlighter(QSyntaxHighlighter):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.highlighting_rules = []
+
+        # Zig keywords
+        keyword_format = QTextCharFormat()
+        keyword_format.setForeground(QColor("#569cd6"))
+        keywords = [
+            'const', 'var', 'extern', 'packed', 'export', 'pub', 'noalias',
+            'inline', 'comptime', 'nakedcc', 'stdcallcc', 'volatile', 'align',
+            'linksection', 'struct', 'enum', 'union', 'break', 'return',
+            'continue', 'asm', 'defer', 'errdefer', 'unreachable', 'try', 'catch',
+            'async', 'await', 'suspend', 'resume', 'cancel', 'if', 'else', 'switch',
+            'and', 'or', 'orelse', 'while', 'for', 'fn', 'usingnamespace', 'test'
+        ]
+        for word in keywords:
+            pattern = f'\\b{word}\\b'
+            self.highlighting_rules.append((re.compile(pattern), keyword_format))
+
+        # Types
+        type_format = QTextCharFormat()
+        type_format.setForeground(QColor("#4ec9b0"))
+        types = [
+            'bool', 'f16', 'f32', 'f64', 'f128', 'void', 'noreturn', 'type',
+            'anyerror', 'promise', 'i8', 'u8', 'i16', 'u16', 'i32', 'u32', 'i64',
+            'u64', 'i128', 'u128', 'isize', 'usize', 'c_short', 'c_ushort',
+            'c_int', 'c_uint', 'c_long', 'c_ulong', 'c_longlong', 'c_ulonglong',
+            'c_longdouble', 'c_void'
+        ]
+        for word in types:
+            pattern = f'\\b{word}\\b'
+            self.highlighting_rules.append((re.compile(pattern), type_format))
+
+        # Strings
+        string_format = QTextCharFormat()
+        string_format.setForeground(QColor("#ce9178"))
+        self.highlighting_rules.append((re.compile('"[^"\\\\]*(\\\\.[^"\\\\]*)*"'), string_format))
+        self.highlighting_rules.append((re.compile("'[^'\\\\]*(\\\\.[^'\\\\]*)*'"), string_format))
+
+        # Comments
+        comment_format = QTextCharFormat()
+        comment_format.setForeground(QColor("#6a9955"))
+        self.highlighting_rules.append((re.compile('//[^\n]*'), comment_format))
+        self.highlighting_rules.append((re.compile('/\\*[^*]*\\*+(?:[^/*][^*]*\\*+)*/'), comment_format))
+
+    def highlightBlock(self, text):
+        for pattern, format in self.highlighting_rules:
+            for match in pattern.finditer(text):
+                self.setFormat(match.start(), match.end() - match.start(), format)
+
+class ZigSnippets:
+    def __init__(self):
+        self.snippets = {
+            'fn': {
+                'prefix': 'fn',
+                'body': 'fn ${1:name}(${2:params}) ${3:type} {\n    ${0}\n}',
+                'description': 'Function declaration'
+            },
+            'test': {
+                'prefix': 'test',
+                'body': 'test "${1:description}" {\n    ${0}\n}',
+                'description': 'Test block'
+            },
+            'struct': {
+                'prefix': 'struct',
+                'body': 'const ${1:Name} = struct {\n    ${0}\n};',
+                'description': 'Struct declaration'
+            },
+            'while': {
+                'prefix': 'while',
+                'body': 'while (${1:condition}) {\n    ${0}\n}',
+                'description': 'While loop'
+            },
+            'if': {
+                'prefix': 'if',
+                'body': 'if (${1:condition}) {\n    ${0}\n}',
+                'description': 'If statement'
+            }
+        }
 
 class LineNumberArea(QWidget):
     def __init__(self, editor):
@@ -719,21 +843,162 @@ class CodeEditor(QPlainTextEdit):
         self.setupShortcuts()
 
     def setupShortcuts(self):
-        # VSCode-style shortcuts
+        # VSCode shortcuts
         QShortcut(QKeySequence("Ctrl+S"), self, self.save_file)
-        QShortcut(QKeySequence("Ctrl+/"), self, self.toggle_comment)
-        QShortcut(QKeySequence("Ctrl+Z"), self, self.undo)
-        QShortcut(QKeySequence("Ctrl+Y"), self, self.redo)
         QShortcut(QKeySequence("Ctrl+F"), self, self.find)
         QShortcut(QKeySequence("Ctrl+H"), self, self.replace)
+        QShortcut(QKeySequence("Ctrl+D"), self, self.duplicate_line)
+        QShortcut(QKeySequence("Alt+Up"), self, self.move_line_up)
+        QShortcut(QKeySequence("Alt+Down"), self, self.move_line_down)
+        QShortcut(QKeySequence("Ctrl+/"), self, self.toggle_comment)
+        QShortcut(QKeySequence("Ctrl+`"), self, self.toggle_terminal)
+        QShortcut(QKeySequence("F5"), self, self.run_code)
+        QShortcut(QKeySequence("Ctrl+Space"), self, self.trigger_suggestions)
         
-        # Ryton specific shortcuts
-        QShortcut(QKeySequence("Alt+Ctrl+F"), self, self.insert_function)
-        QShortcut(QKeySequence("Alt+Ctrl+P"), self, self.insert_pack)
-        QShortcut(QKeySequence("Alt+Ctrl+I"), self, self.insert_if)
-        QShortcut(QKeySequence("Alt+Ctrl+W"), self, self.insert_while)
-        QShortcut(QKeySequence("Alt+Ctrl+R"), self, self.insert_repeat)
+        # Neovim-style shortcuts
+        QShortcut(QKeySequence("Ctrl+W+V"), self, self.split_vertical)
+        QShortcut(QKeySequence("Ctrl+W+S"), self, self.split_horizontal)
+        QShortcut(QKeySequence("Ctrl+W+H"), self, lambda: self.focus_split('left'))
+        QShortcut(QKeySequence("Ctrl+W+L"), self, lambda: self.focus_split('right'))
+        QShortcut(QKeySequence("Ctrl+W+J"), self, lambda: self.focus_split('down'))
+        QShortcut(QKeySequence("Ctrl+W+K"), self, lambda: self.focus_split('up'))
         
+        # Additional useful shortcuts
+        QShortcut(QKeySequence("Ctrl+Shift+P"), self, self.show_command_palette)
+        QShortcut(QKeySequence("Ctrl+K Ctrl+O"), self, self.fold_code)
+        QShortcut(QKeySequence("Ctrl+K Ctrl+J"), self, self.unfold_code)
+        QShortcut(QKeySequence("Ctrl+G"), self, self.goto_line)
+        QShortcut(QKeySequence("Ctrl+P"), self, self.quick_open)
+        QShortcut(QKeySequence("Ctrl+Shift+F"), self, self.find_in_files)
+
+
+    def split_vertical(self):
+        # Реализация вертикального разделения окна
+        pass
+
+    def split_horizontal(self):
+        # Реализация горизонтального разделения окна
+        pass
+
+    def focus_split(self, direction):
+        # Переключение между разделенными окнами
+        pass
+
+    def show_command_palette(self):
+        # Показать командную палитру
+        pass
+
+    def fold_code(self):
+        # Свернуть блок кода
+        pass
+
+    def unfold_code(self):
+        # Развернуть блок кода
+        pass
+
+    def goto_line(self):
+        # Переход к строке
+        line, ok = QInputDialog.getInt(self, "Go to Line", "Line number:", 1, 1, self.document().blockCount())
+        if ok:
+            cursor = QTextCursor(self.document().findBlockByLineNumber(line - 1))
+            self.setTextCursor(cursor)
+
+    def quick_open(self):
+        # Быстрое открытие файла
+        pass
+
+    def find_in_files(self):
+        # Поиск по всем файлам
+        pass
+
+    def trigger_suggestions(self):
+        # Вызов автодополнения
+        self.showCompleter()
+
+    def set_file_type(self, file_path):
+        if file_path.endswith('.md'):
+            profile = QWebEngineProfile("markdown_profile")
+            self.highlighter = MarkdownHighlighter(self.document())
+            splitter = QSplitter(Qt.Orientation.Horizontal)
+            splitter.addWidget(self)
+            self.preview = MarkdownPreview()
+            self.preview.setPage(QWebEnginePage(profile))
+            splitter.addWidget(self.preview)
+            return splitter
+        return self
+
+    def toggle_sidebar_content(self):
+        current = self.sidebar_stack.currentIndex()
+        next_index = (current + 1) % self.sidebar_stack.count()
+        self.sidebar_stack.setCurrentIndex(next_index)
+
+    def new_file(self):
+        new_editor = CodeEditor()
+        self.editor_tabs.addTab(new_editor, "untitled")
+        self.editor_tabs.setCurrentWidget(new_editor)
+
+    def open_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Open File")
+        if file_path:
+            self.load_file(file_path)
+
+    def save_file(self):
+        current_editor = self.editor_tabs.currentWidget()
+        current_tab_text = self.editor_tabs.tabText(self.editor_tabs.currentIndex())
+        
+        if current_editor:
+            # Если это новый файл
+            if current_tab_text == "untitled":
+                file_path, _ = QFileDialog.getSaveFileName(
+                    self,
+                    "Save As...",
+                    self.current_project,
+                    "Ryton files (*.ry);;Python files (*.py);;All Files (*.*);;MarkDown files (*.md);;Zig files(*.zig)"
+                )
+                if file_path:
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        f.write(current_editor.toPlainText())
+                    self.editor_tabs.setTabText(
+                        self.editor_tabs.currentIndex(), 
+                        os.path.basename(file_path)
+                    )
+                    self.status_bar.showMessage(f"Saved: {file_path}", 3000)
+            # Если файл уже существует
+            else:
+                file_path = os.path.join(self.current_project, "src", current_tab_text)
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(current_editor.toPlainText())
+                self.status_bar.showMessage(f"Saved: {file_path}", 3000)
+
+    def run_code(self):
+        current_editor = self.editor_tabs.currentWidget()
+        if current_editor:
+            code = current_editor.toPlainText()
+            self.terminal.terminal.execute_command(f"/home/rejzi/projects/CLI/RytonLang/dist/ryton_launcher.dist/ryton_launcher.bin {self.current_project}src/main.ry")
+
+    def toggle_terminal(self):
+        if self.terminal.isVisible():
+            self.terminal.hide()
+        else:
+            self.terminal.show()
+
+    def close_tab(self, index):
+        if self.editor_tabs.count() > 1:
+            self.editor_tabs.removeTab(index)
+
+    def load_file(self, file_path):
+        try:
+            with open(file_path, 'r') as f:
+                content = f.read()
+            new_editor = CodeEditor()
+            new_editor.setPlainText(content)
+            self.editor_tabs.addTab(new_editor, os.path.basename(file_path))
+            self.editor_tabs.setCurrentWidget(new_editor)
+            self.current_file = file_path
+            self.status_bar.showMessage(f"Opened: {file_path}")
+        except Exception as e:
+            self.status_bar.showMessage(f"Error opening file: {str(e)}")
+
     def insert_function(self):
         cursor = self.textCursor()
         name, ok = QInputDialog.getText(self, "New Function", "Function name:")
@@ -913,9 +1178,10 @@ class CodeEditor(QPlainTextEdit):
             
         return False
 
-    def save_file(self):
-        if hasattr(self.parent(), 'save_file'):
-            self.parent().save_file()
+    def save_file(self):        # Получаем главное окно через иерархию виджетов
+        main_window = self.window()
+        if main_window:
+            main_window.save_file()
 
     def find(self):
         search_text, ok = QInputDialog.getText(self, "Find", "Search for:")
@@ -1259,6 +1525,42 @@ class CodeEditor(QPlainTextEdit):
             bottom = top + round(self.blockBoundingRect(block).height())
             block_number += 1
 
+class MarkdownEditor(CodeEditor):
+    def __init__(self):
+        super().__init__()
+        # Создаем сплиттер и превью сразу при инициализации
+        self.main_widget = QSplitter(Qt.Orientation.Horizontal)
+        self.main_widget.addWidget(self)
+        
+        self.preview = MarkdownPreview()
+        self.main_widget.addWidget(self.preview)
+        
+        # Устанавливаем соотношение размеров редактора и превью
+        self.main_widget.setSizes([500, 500])
+        
+        # Подключаем обновление превью при изменении текста
+        self.textChanged.connect(self.update_preview)
+        
+        # Сразу обновляем превью
+        self.update_preview()
+
+    def get_widget(self):
+        return self.main_widget
+
+    def update_preview(self):
+        import markdown
+        html = markdown.markdown(self.toPlainText())
+        self.preview.setHtml("""
+            <style>
+                body { 
+                    background: #1e1e1e; 
+                    color: #d4d4d4;
+                    font-family: 'Segoe UI', sans-serif;
+                    padding: 20px;
+                }
+            </style>
+        """ + html)
+
 class FileManagerTab(QWidget):
     def __init__(self, project_dir="~"):
         super().__init__()
@@ -1338,23 +1640,26 @@ class FileManagerTab(QWidget):
     def open_file(self, index):
         file_path = self.model.filePath(index)
         if os.path.isfile(file_path):
-            # Получаем главное окно через иерархию виджетов
             main_window = self.window()
             
-            # Создаем новую вкладку редактора
-            editor = CodeEditor()
-            
-            # Читаем и устанавливаем содержимое файла
+            if file_path.endswith('README.md'):
+                editor = MarkdownEditor()
+                editor_widget = editor.get_widget()
+            else:
+                editor = CodeEditor()
+                editor_widget = editor
+                
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
                 editor.setPlainText(content)
             
-            # Добавляем новую вкладку с именем файла
-            file_name = os.path.basename(file_path)
-            main_window.editor_tabs.addTab(editor, file_name)
+            # Получаем виджет с учетом типа файла    
+            editor_widget = editor.set_file_type(file_path)
             
-            # Переключаемся на новую вкладку
-            main_window.editor_tabs.setCurrentWidget(editor)
+            # Добавляем новую вкладку
+            file_name = os.path.basename(file_path)
+            main_window.editor_tabs.addTab(editor_widget, file_name)
+            main_window.editor_tabs.setCurrentWidget(editor_widget)
 
 
     def create_new_file(self, path):
