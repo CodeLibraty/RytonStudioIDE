@@ -3,8 +3,6 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QSpli
                             QLineEdit)
 from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal
 from PyQt6.QtGui import QIcon, QPixmap
-import google.generativeai as genai
-import anthropic
 import os
 
 class AIProvider:
@@ -14,10 +12,10 @@ class AIProvider:
         
     def setup_gemini(self, api_key):
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-pro')
+        self.model = 'gemeni-pro' #genai.GenerativeModel('gemini-pro')
         
     def setup_anthropic(self, api_key):
-        self.model = anthropic.Anthropic(api_key=api_key)
+        self.model = 'claude' #anthropic.Anthropic(api_key=api_key)
         
     def generate_response(self, prompt):
         if isinstance(self.model, genai.GenerativeModel):
@@ -48,7 +46,7 @@ class MessageWidget(QFrame):
         # Аватар и имя
         header = QHBoxLayout()
         avatar = QLabel()
-        avatar_pixmap = QPixmap("icons/github.svg" if is_user else "icons/terminal.svg")
+        avatar_pixmap = QPixmap("/usr/local/share/ryton-studio/icons/github.svg" if is_user else "/usr/local/share/ryton-studio/icons/terminal.svg")
         avatar.setPixmap(avatar_pixmap.scaled(24, 24, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
         
         name = QLabel("You" if is_user else "Cody")
@@ -155,7 +153,7 @@ class ChatAssistant(QWidget):
         self.input_field.setMaximumHeight(100)
         self.input_field.setPlaceholderText("Введите запрос...")
         
-        send_btn = QPushButton(QIcon("icons/send.svg"), "")
+        send_btn = QPushButton(QIcon("/usr/local/share/ryton-studio/icons/send.svg"), "")
         send_btn.clicked.connect(self.send_message)
         
         input_layout.addWidget(self.input_field)

@@ -193,9 +193,9 @@ class GitWidget(QWidget):
         
         # Панель инструментов
         toolbar = QHBoxLayout()
-        self.sync_btn = self.create_tool_button("icons/sync.svg", "Синхронизировать")
-        self.commit_btn = self.create_tool_button("icons/commit.svg", "Commit")
-        self.branch_btn = self.create_tool_button("icons/branch.svg", "Ветка")
+        self.sync_btn = self.create_tool_button("/usr/local/share/ryton-studio/icons/sync.svg", "Синхронизировать")
+        self.commit_btn = self.create_tool_button("/usr/local/share/ryton-studio/icons/commit.svg", "Commit")
+        self.branch_btn = self.create_tool_button("/usr/local/share/ryton-studio/icons/branch.svg", "Ветка")
         
         toolbar.addWidget(self.sync_btn)
         toolbar.addWidget(self.commit_btn)
@@ -779,7 +779,7 @@ class RefactoringManager:
 class CodeEditor(QPlainTextEdit):
     def __init__(self):
         super().__init__()
-        font_id = QFontDatabase.addApplicationFont("fonts/JetBrainsMono.ttf")
+        font_id = QFontDatabase.addApplicationFont("/usr/local/share/ryton-studio/fonts/JetBrainsMono.ttf")
         font_family = QFontDatabase.applicationFontFamilies(font_id)[0]
         
         custom_font = QFont(font_family, 10)
@@ -1770,10 +1770,10 @@ class FileSystemModel(QFileSystemModel):
         self.setFilter(QDir.Filter.AllEntries | QDir.Filter.NoDotAndDotDot | QDir.Filter.Hidden)
         
         # Custom icons
-        self.folder_icon = QIcon("icons/directory.svg")
-        self.file_icon = QIcon("icons/code.svg")
-        self.image_icon = QIcon("icons/code.svg")
-        self.code_icon = QIcon("icons/code.svg")
+        self.folder_icon = QIcon("/usr/local/share/ryton-studio/icons/directory.svg")
+        self.file_icon = QIcon("/usr/local/share/ryton-studio/icons/code.svg")
+        self.image_icon = QIcon("/usr/local/share/ryton-studio/icons/code.svg")
+        self.code_icon = QIcon("/usr/local/share/ryton-studio/icons/code.svg")
         
     def data(self, index, role):
         if role == Qt.ItemDataRole.DecorationRole:
@@ -1824,17 +1824,17 @@ class FileSystemModel(QFileSystemModel):
             file_path = self.model.filePath(index)
             
             # Add actions
-            new_file = menu.addAction(QIcon("icons/new-file.svg"), "New File")
-            new_folder = menu.addAction(QIcon("icons/new-folder.svg"), "New Folder")
+            new_file = menu.addAction(QIcon("/usr/local/share/ryton-studio/icons/new-file.svg"), "New File")
+            new_folder = menu.addAction(QIcon("/usr/local/share/ryton-studio/icons/new-folder.svg"), "New Folder")
             menu.addSeparator()
-            copy = menu.addAction(QIcon("icons/copy.svg"), "Copy")
-            cut = menu.addAction(QIcon("icons/cut.svg"), "Cut")
-            paste = menu.addAction(QIcon("icons/paste.svg"), "Paste")
+            copy = menu.addAction(QIcon("/usr/local/share/ryton-studio/icons/copy.svg"), "Copy")
+            cut = menu.addAction(QIcon("/usr/local/share/ryton-studio/icons/cut.svg"), "Cut")
+            paste = menu.addAction(QIcon("/usr/local/share/ryton-studio/icons/paste.svg"), "Paste")
             menu.addSeparator()
-            rename = menu.addAction(QIcon("icons/rename.svg"), "Rename")
-            delete = menu.addAction(QIcon("icons/delete.svg"), "Delete")
+            rename = menu.addAction(QIcon("/usr/local/share/ryton-studio/icons/rename.svg"), "Rename")
+            delete = menu.addAction(QIcon("/usr/local/share/ryton-studio/icons/delete.svg"), "Delete")
             menu.addSeparator()
-            open_terminal = menu.addAction(QIcon("icons/terminal.svg"), "Open in Terminal")
+            open_terminal = menu.addAction(QIcon("/usr/local/share/ryton-studio/icons/terminal.svg"), "Open in Terminal")
             
             # Connect actions
             new_file.triggered.connect(lambda: self.create_new_file(file_path))
@@ -1863,7 +1863,7 @@ class CustomTerminal(QTextEdit):
         self.process.readyReadStandardError.connect(self.handle_stderr)
 
         # Настраиваем фоновое изображение
-        self.background_image = QPixmap("images/linux.png")  # Путь к изображению
+        self.background_image = QPixmap("/usr/local/share/ryton-studio/images/linux.png")  # Путь к изображению
         self.background_opacity = 0.8  # Прозрачность от 0 до 1
         
         # Включаем поддержку прозрачности
@@ -2093,3 +2093,65 @@ class TerminalTab(QWidget):
             "Line": [0.9, 0.9, 1, 1]
         }
         return colors.get(style, [1, 1, 1, 1])
+
+from PyQt6.QtWidgets import QWidget, QVBoxLayout
+from PyQt6.QtCore import QProcess
+
+class TerminalTab(QWidget):
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Создаем простой и надежный терминал
+        self.output = QTextEdit()
+        self.output.setReadOnly(True)
+        self.output.setFont(QFont("Monospace", 10))
+        self.output.setStyleSheet("""
+            QTextEdit {
+                background-color: #1E1E1E;
+                color: #D4D4D4;
+                border: none;
+            }
+        """)
+        
+        # Строка ввода команд
+        self.input = QLineEdit()
+        self.input.setFont(QFont("Monospace", 10))
+        self.input.setStyleSheet("""
+            QLineEdit {
+                background-color: #2D2D2D;
+                color: #D4D4D4;
+                border: none;
+                padding: 5px;
+            }
+        """)
+        self.input.returnPressed.connect(self.run_command)
+        
+        layout.addWidget(self.output, stretch=1)
+        layout.addWidget(self.input)
+        
+        self.process = QProcess()
+        self.process.readyReadStandardOutput.connect(self.handle_output)
+        self.process.readyReadStandardError.connect(self.handle_error)
+        
+        # Показываем приветствие
+        self.output.append("Terminal ready. Type commands below.")
+        
+    def run_command(self):
+        command = self.input.text()
+        self.input.clear()
+        self.output.append(f"\n$ {command}")
+        self.process.start('/bin/bash', ['-c', command])
+        
+    def handle_output(self):
+        data = self.process.readAllStandardOutput().data().decode()
+        self.output.append(data)
+        
+    def handle_error(self):
+        data = self.process.readAllStandardError().data().decode()
+        self.output.append(data)
+        
+    def execute_command(self, command):
+        self.output.append(f"\n$ {command}")
+        self.process.start('/bin/bash', ['-c', command])

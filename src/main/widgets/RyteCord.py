@@ -210,7 +210,7 @@ class CollaborationWidget(QWidget):
             }
         """)
         
-        self.send_btn = QPushButton(QIcon("icons/send.svg"), "")
+        self.send_btn = QPushButton(QIcon("/usr/local/share/ryton-studio/icons/send.svg"), "")
         self.send_btn.setFixedSize(36, 36)
         self.send_btn.clicked.connect(self.send_message)
         self.send_btn.setStyleSheet("""
@@ -241,9 +241,9 @@ class CollaborationWidget(QWidget):
         # Кнопки управления звонком
         call_controls = QHBoxLayout()
         
-        self.call_btn = QPushButton(QIcon("icons/call.svg"), "Позвонить")
+        self.call_btn = QPushButton(QIcon("/usr/local/share/ryton-studio/icons/call.svg"), "Позвонить")
         self.call_btn.clicked.connect(self.start_call)
-        self.hangup_btn = QPushButton(QIcon("icons/hangup.svg"), "Завершить")
+        self.hangup_btn = QPushButton(QIcon("/usr/local/share/ryton-studio/icons/hangup.svg"), "Завершить")
         self.hangup_btn.clicked.connect(self.end_call)
         self.hangup_btn.setEnabled(False)
         
@@ -270,8 +270,8 @@ class CollaborationWidget(QWidget):
         call_layout.addStretch()
         
         # Добавляем вкладки
-        self.tabs.addTab(chat_widget, QIcon("icons/chat.svg"), "Чат")
-        self.tabs.addTab(call_widget, QIcon("icons/call.svg"), "Звонок")
+        self.tabs.addTab(chat_widget, QIcon("/usr/local/share/ryton-studio/icons/chat.svg"), "Чат")
+        self.tabs.addTab(call_widget, QIcon("/usr/local/share/ryton-studio/icons/call.svg"), "Звонок")
         layout.addWidget(self.tabs)
         
         # Добавляем обработку Enter для сообщений
@@ -290,7 +290,7 @@ class CollaborationWidget(QWidget):
             }
         """)
         
-        copy_ip_btn = QPushButton(QIcon("icons/copy.svg"), "")
+        copy_ip_btn = QPushButton(QIcon("/usr/local/share/ryton-studio/icons/copy.svg"), "")
         copy_ip_btn.setFixedSize(24, 24)
         copy_ip_btn.clicked.connect(lambda: QApplication.clipboard().setText(self.ip_display.text()))
         copy_ip_btn.setToolTip("Копировать IP")

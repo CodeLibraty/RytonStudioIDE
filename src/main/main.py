@@ -562,19 +562,19 @@ class Editor(QMainWindow):
         # Добавляем кнопки переключения в боковую панель
         actions = [
 #            ("icons/new.svg", "New File", self.new_file),
-            ("icons/directory.svg", "Open File", self.open_file),
+            ("/usr/local/share/ryton-studio/icons/directory.svg", "Open File", self.open_file),
 #            ("icons/save.svg", "Save", self.save_file),
-            ("icons/run.svg", "Run", self.run_code),
-            ("icons/terminal.svg", "Toggle Terminal", self.toggle_terminal),
+            ("/usr/local/share/ryton-studio/icons/run.svg", "Run", self.run_code),
+            ("/usr/local/share/ryton-studio/icons/terminal.svg", "Toggle Terminal", self.toggle_terminal),
 #            ("icons/settings.svg", "Settings", self.open_settings),
-            ("icons/web.svg", "Toggle Sidebar", self.toggle_sidebar_content),
-            ("icons/directory.svg", "Files", lambda: self.sidebar_stack.setCurrentWidget(self.file_manager)),
+            ("/usr/local/share/ryton-studio/icons/web.svg", "Toggle Sidebar", self.toggle_sidebar_content),
+            ("/usr/local/share/ryton-studio/icons/directory.svg", "Files", lambda: self.sidebar_stack.setCurrentWidget(self.file_manager)),
 #            ("icons/extensions.svg", "Extensions", lambda: self.sidebar_stack.setCurrentWidget(self.extensions_view)),
 #            ("icons/debug.svg", "Debug", lambda: self.sidebar_stack.setCurrentWidget(self.debug_view)),
 #            ("icons/search.svg", "Search", lambda: self.sidebar_stack.setCurrentWidget(self.search_view)),
-            ("icons/git.svg", "Git", lambda: self.sidebar_stack.setCurrentWidget(self.git_view)),
-            ("icons/collab.svg", "AI Assistant", lambda: self.sidebar_stack.setCurrentWidget(self.chat_assistant)),
-            ("icons/chat.svg", "RyteCord Chat", lambda: self.sidebar_stack.setCurrentWidget(self.collab_widget))
+            ("/usr/local/share/ryton-studio/icons/git.svg", "Git", lambda: self.sidebar_stack.setCurrentWidget(self.git_view)),
+#            ("icons/collab.svg", "AI Assistant", lambda: self.sidebar_stack.setCurrentWidget(self.chat_assistant)),
+            ("/usr/local/share/ryton-studio/icons/chat.svg", "RyteCord Chat", lambda: self.sidebar_stack.setCurrentWidget(self.collab_widget))
 #            ("icons/test.svg", "Testing", lambda: self.sidebar_stack.setCurrentWidget(self.test_view))
         ]
         for icon_path, tooltip, handler in actions:
@@ -954,10 +954,10 @@ class ProjectSetupDialog(QDialog):
         
         # Шаги с иконками
         steps = [
-            ("Тип проекта", "icons/project.svg"),
-            ("Язык", "icons/code.svg"), 
-            ("Настройки", "icons/settings.svg"),
-            ("Зависимости", "icons/package.svg")
+            ("Тип проекта", "/usr/local/share/ryton-studio/icons/project.svg"),
+            ("Язык", "/usr/local/share/ryton-studio/icons/code.svg"), 
+            ("Настройки", "/usr/local/share/ryton-studio/icons/settings.svg"),
+            ("Зависимости", "/usr/local/share/ryton-studio/icons/package.svg")
         ]
         
         self.step_buttons = []
@@ -1001,10 +1001,10 @@ class ProjectSetupDialog(QDialog):
         project_layout = QVBoxLayout(project_page)
         
         project_types = [
-            ("CLI Application", "icons/terminal.svg", "Консольное приложение с интерфейсом командной строки"),
-            ("GUI Application", "icons/window.svg", "Графическое приложение с пользовательским интерфейсом"),
-            ("Web Application", "icons/web.svg", "Веб-приложение с поддержкой HTTP и REST API"),
-            ("Library/Framework", "icons/package.svg", "Библиотека или фреймворк для других проектов")
+            ("CLI Application", "/usr/local/share/ryton-studio/icons/terminal.svg", "Консольное приложение с интерфейсом командной строки"),
+            ("GUI Application", "/usr/local/share/ryton-studio/icons/window.svg", "Графическое приложение с пользовательским интерфейсом"),
+            ("Web Application", "/usr/local/share/ryton-studio/icons/web.svg", "Веб-приложение с поддержкой HTTP и REST API"),
+            ("Library/Framework", "/usr/local/share/ryton-studio/icons/package.svg", "Библиотека или фреймворк для других проектов")
         ]
         
         self.project_group = QButtonGroup(self)
@@ -1190,8 +1190,8 @@ class ProjectSetupDialog(QDialog):
         layout = QVBoxLayout(language_page)
         
         languages = [
-            ("Ryton", "icons/ryton.png", "Современный язык высокого уровня для разработки профисионального ПО"),
-            ("Zig", "icons/zig.svg", "Низкоуровневый язык с нулевыми накладными расходами")
+            ("Ryton", "/usr/local/share/ryton-studio/icons/ryton.png", "Современный язык высокого уровня для разработки профисионального ПО"),
+            ("Zig", "/usr/local/share/ryton-studio/icons/zig.svg", "Низкоуровневый язык с нулевыми накладными расходами")
         ]
 
         self.language_group = QButtonGroup(self)
